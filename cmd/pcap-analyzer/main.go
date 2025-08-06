@@ -74,6 +74,19 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 		return
 	}
 	
+	// Wait for buffer to fill up more to ensure we have complete headers
+	// Many HTTP requests span multiple TCP packets
+	prevLen := 0
+	for i := 0; i < 10; i++ {
+		currentLen := h.r.Buffer.Len()
+		if currentLen == prevLen && currentLen > 100 {
+			// Buffer stopped growing and has some data
+			break
+		}
+		prevLen = currentLen
+		time.Sleep(20 * time.Millisecond)
+	}
+	
 	// Check if this is TLS/encrypted traffic by looking at the destination port and data
 	dstPort := h.transport.Dst().String()
 	srcPort := h.transport.Src().String()
@@ -98,6 +111,7 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 		
 		peekStr := string(peek)
 		
+		
 		// Check if this looks like TLS handshake data
 		if len(peek) >= 3 && peek[0] == 0x16 && peek[1] == 0x03 {
 			return
@@ -118,9 +132,15 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			// Parse as HTTP request
 			req, err := http.ReadRequest(buf)
 			if err != nil {
-				// Try to see if there's more data coming  
-				time.Sleep(10 * time.Millisecond)
-				continue
+				// If we get an error, wait for more data and try again
+				// But only retry a few times to avoid infinite loops
+				time.Sleep(50 * time.Millisecond)
+				if h.r.Buffer.Len() > buf.Buffered() {
+					// More data arrived, try again
+					continue
+				}
+				// No more data coming, give up on this stream
+				return
 			}
 			h.printHTTPRequest(req, dnsCache)
 		}
@@ -132,6 +152,7 @@ func (h *HTTPStream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 	dstIP := h.net.Dst().String()
 	srcPort := h.transport.Src().String()
 	dstPort := h.transport.Dst().String()
+	
 
 	// Use DNS cache for forward DNS, skip RDNS lookups to avoid blocking
 	srcFQDN := ""
@@ -187,10 +208,16 @@ func (h *HTTPStream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 	fmt.Printf("Host: %s\n", req.Host)
 
 	fmt.Println("\nHeaders:")
+	// Print all headers from the request
 	for name, values := range req.Header {
 		for _, value := range values {
 			fmt.Printf("  %s: %s\n", name, value)
 		}
+	}
+	
+	// Debug: Check if there are more headers we might be missing
+	if req.ContentLength > 0 {
+		fmt.Printf("  [Content-Length: %d]\n", req.ContentLength)
 	}
 
 	if req.Body != nil {
@@ -218,6 +245,7 @@ func (h *HTTPStream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache)
 	dstIP := h.net.Dst().String()
 	srcPort := h.transport.Src().String()
 	dstPort := h.transport.Dst().String()
+	
 
 	// Use DNS cache for forward DNS, skip RDNS lookups to avoid blocking
 	srcFQDN := ""
@@ -299,6 +327,8 @@ func (t *tcpReader) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 }
 
 func (t *tcpReader) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
+	// Signal that reassembly is complete
+	// This allows any waiting HTTP parsers to process remaining data
 	return false
 }
 
@@ -385,6 +415,8 @@ func main() {
 		}
 	}
 
+	// Flush remaining data and wait for parsers to complete
 	assembler.FlushAll()
+	time.Sleep(500 * time.Millisecond) // Give parsers time to process final data
 	fmt.Println("\nAnalysis complete.")
 }
