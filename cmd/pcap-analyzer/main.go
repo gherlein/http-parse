@@ -62,7 +62,8 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 	
 	// Check if this is TLS/encrypted traffic by looking at the destination port and data
 	dstPort := h.transport.Dst().String()
-	if dstPort == "443" || dstPort == "8443" {
+	srcPort := h.transport.Src().String()
+	if dstPort == "443" || dstPort == "8443" || srcPort == "443" || srcPort == "8443" {
 		// Peek at first few bytes to confirm TLS
 		if h.r.Buffer.Len() >= 3 {
 			firstBytes := h.r.Buffer.Bytes()[:3]
@@ -94,14 +95,18 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			dummyReq := &http.Request{Method: "GET"}
 			resp, err := http.ReadResponse(buf, dummyReq)
 			if err != nil {
-				return
+				// Try to see if there's more data coming
+				time.Sleep(10 * time.Millisecond)
+				continue
 			}
 			h.printHTTPResponse(resp, dnsCache)
 		} else {
 			// Parse as HTTP request
 			req, err := http.ReadRequest(buf)
 			if err != nil {
-				return
+				// Try to see if there's more data coming  
+				time.Sleep(10 * time.Millisecond)
+				continue
 			}
 			h.printHTTPRequest(req, dnsCache)
 		}
@@ -114,8 +119,15 @@ func (h *HTTPStream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 	srcPort := h.transport.Src().String()
 	dstPort := h.transport.Dst().String()
 
-	srcFQDN := dnsCache.GetWithRDNS(srcIP)
-	dstFQDN := dnsCache.GetWithRDNS(dstIP)
+	// Use DNS cache for forward DNS, skip RDNS lookups to avoid blocking
+	srcFQDN := ""
+	if fqdn, ok := dnsCache.Get(srcIP); ok {
+		srcFQDN = fqdn
+	}
+	dstFQDN := ""
+	if fqdn, ok := dnsCache.Get(dstIP); ok {
+		dstFQDN = fqdn
+	}
 
 	// Construct full URL with protocol and hostname
 	protocol := "http"
@@ -183,8 +195,15 @@ func (h *HTTPStream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache)
 	srcPort := h.transport.Src().String()
 	dstPort := h.transport.Dst().String()
 
-	srcFQDN := dnsCache.GetWithRDNS(srcIP)
-	dstFQDN := dnsCache.GetWithRDNS(dstIP)
+	// Use DNS cache for forward DNS, skip RDNS lookups to avoid blocking
+	srcFQDN := ""
+	if fqdn, ok := dnsCache.Get(srcIP); ok {
+		srcFQDN = fqdn
+	}
+	dstFQDN := ""
+	if fqdn, ok := dnsCache.Get(dstIP); ok {
+		dstFQDN = fqdn
+	}
 
 	fmt.Printf("\n=== HTTP Response ===\n")
 	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
