@@ -148,17 +148,10 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 }
 
 func (h *HTTPStream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
-	srcIP := h.net.Src().String()
 	dstIP := h.net.Dst().String()
-	srcPort := h.transport.Src().String()
 	dstPort := h.transport.Dst().String()
 	
-
 	// Use DNS cache for forward DNS, skip RDNS lookups to avoid blocking
-	srcFQDN := ""
-	if fqdn, ok := dnsCache.Get(srcIP); ok {
-		srcFQDN = fqdn
-	}
 	dstFQDN := ""
 	if fqdn, ok := dnsCache.Get(dstIP); ok {
 		dstFQDN = fqdn
@@ -190,24 +183,8 @@ func (h *HTTPStream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 		fullURL += "?" + req.URL.RawQuery
 	}
 
-	fmt.Printf("\n=== HTTP Request ===\n")
-	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
-	fmt.Printf("Source: %s:%s", srcIP, srcPort)
-	if srcFQDN != "" {
-		fmt.Printf(" (%s)", srcFQDN)
-	}
-	fmt.Printf("\n")
-	fmt.Printf("Destination: %s:%s", dstIP, dstPort)
-	if dstFQDN != "" {
-		fmt.Printf(" (%s)", dstFQDN)
-	}
-	fmt.Printf("\n")
-	fmt.Printf("Method: %s\n", req.Method)
-	fmt.Printf("URL: %s\n", fullURL)
-	fmt.Printf("Proto: %s\n", req.Proto)
-	fmt.Printf("Host: %s\n", req.Host)
-
-	fmt.Println("\nHeaders:")
+	fmt.Printf("\n*********************************\n")
+	fmt.Printf("%s %s (%s)\n", req.Method, fullURL, req.Proto)
 	// Print all headers from the request
 	for name, values := range req.Header {
 		for _, value := range values {
@@ -228,51 +205,24 @@ func (h *HTTPStream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 			// Check if the request body is gzipped
 			if req.Header.Get("Content-Encoding") == "gzip" {
 				if decompressed, err := decompressGzip(bodyData); err == nil {
-					fmt.Printf("\nRequest Body (%d bytes, decompressed from gzip):\n%s\n", len(decompressed), string(decompressed))
+					fmt.Printf("Request Body (%d bytes, decompressed from gzip):\n%s\n", len(decompressed), string(decompressed))
 				} else {
-					fmt.Printf("\nRequest Body (%d bytes, gzip decompression failed):\n%s\n", n, string(bodyData))
+					fmt.Printf("Request Body (%d bytes, gzip decompression failed):\n%s\n", n, string(bodyData))
 				}
 			} else {
-				fmt.Printf("\nRequest Body (%d bytes):\n%s\n", n, string(bodyData))
+				fmt.Printf("Request Body (%d bytes):\n%s\n", n, string(bodyData))
 			}
 		}
 		req.Body.Close()
+		fmt.Println("-------")
+	} else {
+		fmt.Println("-------")
 	}
 }
 
 func (h *HTTPStream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache) {
-	srcIP := h.net.Src().String()
-	dstIP := h.net.Dst().String()
-	srcPort := h.transport.Src().String()
-	dstPort := h.transport.Dst().String()
-	
 
-	// Use DNS cache for forward DNS, skip RDNS lookups to avoid blocking
-	srcFQDN := ""
-	if fqdn, ok := dnsCache.Get(srcIP); ok {
-		srcFQDN = fqdn
-	}
-	dstFQDN := ""
-	if fqdn, ok := dnsCache.Get(dstIP); ok {
-		dstFQDN = fqdn
-	}
-
-	fmt.Printf("\n=== HTTP Response ===\n")
-	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
-	fmt.Printf("Source: %s:%s", srcIP, srcPort)
-	if srcFQDN != "" {
-		fmt.Printf(" (%s)", srcFQDN)
-	}
-	fmt.Printf("\n")
-	fmt.Printf("Destination: %s:%s", dstIP, dstPort)
-	if dstFQDN != "" {
-		fmt.Printf(" (%s)", dstFQDN)
-	}
-	fmt.Printf("\n")
-	fmt.Printf("Status: %s\n", resp.Status)
-	fmt.Printf("Proto: %s\n", resp.Proto)
-
-	fmt.Println("\nHeaders:")
+	fmt.Printf("%s (%s)\n", resp.Status, resp.Proto)
 	for name, values := range resp.Header {
 		for _, value := range values {
 			fmt.Printf("  %s: %s\n", name, value)
@@ -287,12 +237,12 @@ func (h *HTTPStream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache)
 			// Check if the response body is gzipped
 			if resp.Header.Get("Content-Encoding") == "gzip" {
 				if decompressed, err := decompressGzip(bodyData); err == nil {
-					fmt.Printf("\nResponse Body (%d bytes, decompressed from gzip):\n%s\n", len(decompressed), string(decompressed))
+					fmt.Printf("Response Body (%d bytes, decompressed from gzip):\n%s\n", len(decompressed), string(decompressed))
 				} else {
-					fmt.Printf("\nResponse Body (%d bytes, gzip decompression failed):\n%s\n", n, string(bodyData))
+					fmt.Printf("Response Body (%d bytes, gzip decompression failed):\n%s\n", n, string(bodyData))
 				}
 			} else {
-				fmt.Printf("\nResponse Body (%d bytes):\n%s\n", n, string(bodyData))
+				fmt.Printf("Response Body (%d bytes):\n%s\n", n, string(bodyData))
 			}
 		}
 		resp.Body.Close()
@@ -347,11 +297,6 @@ func main() {
 	if pcapFile == "" {
 		log.Fatal("Please provide a pcap file using -file flag")
 	}
-	
-	if !enableDNS {
-		fmt.Println("Note: DNS packet analysis disabled. HTTP traffic will still be analyzed.")
-		fmt.Println("      Use -d or --dns to enable DNS packet parsing.")
-	}
 
 	handle, err := pcap.OpenOffline(pcapFile)
 	if err != nil {
@@ -368,14 +313,6 @@ func main() {
 	assembler := reassembly.NewAssembler(streamPool)
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
-	fmt.Printf("Starting pcap analysis of file: %s\n", pcapFile)
-	if enableDNS {
-		fmt.Println("Tracking DNS queries and HTTP streams...")
-	} else {
-		fmt.Println("Tracking HTTP streams only...")
-	}
-	fmt.Println("=" + strings.Repeat("=", 50))
 
 	for packet := range packetSource.Packets() {
 		if enableDNS {
@@ -418,5 +355,4 @@ func main() {
 	// Flush remaining data and wait for parsers to complete
 	assembler.FlushAll()
 	time.Sleep(500 * time.Millisecond) // Give parsers time to process final data
-	fmt.Println("\nAnalysis complete.")
 }
