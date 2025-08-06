@@ -35,6 +35,14 @@ func (t *tcpReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+type Context struct {
+	CaptureInfo gopacket.CaptureInfo
+}
+
+func (c *Context) GetCaptureInfo() gopacket.CaptureInfo {
+	return c.CaptureInfo
+}
+
 type tcpStreamFactory struct {
 	dnsCache *dns.Cache
 }
@@ -47,15 +55,15 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			if err != nil {
 				return
 			}
-			
+
 			srcIP := h.net.Src().String()
 			dstIP := h.net.Dst().String()
 			srcPort := h.transport.Src().String()
 			dstPort := h.transport.Dst().String()
-			
+
 			srcFQDN, _ := dnsCache.Get(srcIP)
 			dstFQDN, _ := dnsCache.Get(dstIP)
-			
+
 			fmt.Printf("\n=== HTTP Request ===\n")
 			fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
 			fmt.Printf("Source: %s:%s", srcIP, srcPort)
@@ -72,14 +80,14 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			fmt.Printf("URL: %s\n", req.URL)
 			fmt.Printf("Proto: %s\n", req.Proto)
 			fmt.Printf("Host: %s\n", req.Host)
-			
+
 			fmt.Println("\nHeaders:")
 			for name, values := range req.Header {
 				for _, value := range values {
 					fmt.Printf("  %s: %s\n", name, value)
 				}
 			}
-			
+
 			if req.Body != nil {
 				body := make([]byte, 1024*1024) // 1MB max
 				n, _ := req.Body.Read(body)
@@ -93,15 +101,15 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			if err != nil {
 				return
 			}
-			
+
 			srcIP := h.net.Src().String()
 			dstIP := h.net.Dst().String()
 			srcPort := h.transport.Src().String()
 			dstPort := h.transport.Dst().String()
-			
+
 			srcFQDN, _ := dnsCache.Get(srcIP)
 			dstFQDN, _ := dnsCache.Get(dstIP)
-			
+
 			fmt.Printf("\n=== HTTP Response ===\n")
 			fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
 			fmt.Printf("Source: %s:%s", srcIP, srcPort)
@@ -116,14 +124,14 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			fmt.Printf("\n")
 			fmt.Printf("Status: %s\n", resp.Status)
 			fmt.Printf("Proto: %s\n", resp.Proto)
-			
+
 			fmt.Println("\nHeaders:")
 			for name, values := range resp.Header {
 				for _, value := range values {
 					fmt.Printf("  %s: %s\n", name, value)
 				}
 			}
-			
+
 			if resp.Body != nil {
 				body := make([]byte, 1024*1024) // 1MB max
 				n, _ := resp.Body.Read(body)
@@ -146,65 +154,69 @@ func (h *tcpStreamFactory) New(net, transport gopacket.Flow, tcp *layers.TCP, ac
 		},
 	}
 	hstream.r.parent = hstream
-	
+
 	go hstream.run(h.dnsCache)
-	
+
 	return &hstream.r
 }
 
-func (t *tcpReader) Reassembled(reassembly []reassembly.BytesContainer) {
-	for _, bc := range reassembly {
-		t.Buffer.Write(bc.GetData())
-	}
+func (t *tcpReader) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.AssemblerContext) {
+	length, _ := sg.Lengths()
+	data := sg.Fetch(length)
+	t.Buffer.Write(data)
 }
 
 func (t *tcpReader) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	return false
 }
 
+func (t *tcpReader) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassembly.TCPFlowDirection, seq reassembly.Sequence, start *bool, ac reassembly.AssemblerContext) bool {
+	return true
+}
+
 func main() {
 	var pcapFile string
 	flag.StringVar(&pcapFile, "file", "", "Path to pcap file")
 	flag.Parse()
-	
+
 	if pcapFile == "" {
 		log.Fatal("Please provide a pcap file using -file flag")
 	}
-	
+
 	handle, err := pcap.OpenOffline(pcapFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer handle.Close()
-	
+
 	dnsCache := dns.NewCache()
-	
+
 	streamFactory := &tcpStreamFactory{
 		dnsCache: dnsCache,
 	}
 	streamPool := reassembly.NewStreamPool(streamFactory)
 	assembler := reassembly.NewAssembler(streamPool)
-	
+
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	
+
 	fmt.Printf("Starting pcap analysis of file: %s\n", pcapFile)
 	fmt.Println("Tracking DNS queries and HTTP streams...")
 	fmt.Println("=" + strings.Repeat("=", 50))
-	
+
 	for packet := range packetSource.Packets() {
 		dns.ParsePacket(packet, dnsCache)
-		
+
 		if tcp := packet.Layer(layers.LayerTypeTCP); tcp != nil {
 			tcpLayer := tcp.(*layers.TCP)
 			assembler.AssembleWithContext(
 				packet.NetworkLayer().NetworkFlow(),
 				tcpLayer,
-				&reassembly.Context{
+				&Context{
 					CaptureInfo: packet.Metadata().CaptureInfo,
 				})
 		}
 	}
-	
+
 	assembler.FlushAll()
 	fmt.Println("\nAnalysis complete.")
 }

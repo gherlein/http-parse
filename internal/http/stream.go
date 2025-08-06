@@ -37,14 +37,14 @@ func (s *Stream) Run(dnsCache *dns.Cache) {
 			if err != nil {
 				return
 			}
-			
+
 			s.printHTTPRequest(req, dnsCache)
 		} else {
 			resp, err := http.ReadResponse(buf, nil)
 			if err != nil {
 				return
 			}
-			
+
 			s.printHTTPResponse(resp, dnsCache)
 		}
 	}
@@ -55,10 +55,10 @@ func (s *Stream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 	dstIP := s.net.Dst().String()
 	srcPort := s.transport.Src().String()
 	dstPort := s.transport.Dst().String()
-	
+
 	srcFQDN, _ := dnsCache.Get(srcIP)
 	dstFQDN, _ := dnsCache.Get(dstIP)
-	
+
 	fmt.Printf("\n=== HTTP Request ===\n")
 	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
 	fmt.Printf("Source: %s:%s", srcIP, srcPort)
@@ -75,14 +75,14 @@ func (s *Stream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 	fmt.Printf("URL: %s\n", req.URL)
 	fmt.Printf("Proto: %s\n", req.Proto)
 	fmt.Printf("Host: %s\n", req.Host)
-	
+
 	fmt.Println("\nHeaders:")
 	for name, values := range req.Header {
 		for _, value := range values {
 			fmt.Printf("  %s: %s\n", name, value)
 		}
 	}
-	
+
 	if req.Body != nil {
 		body := make([]byte, 1024*1024) // 1MB max
 		n, _ := req.Body.Read(body)
@@ -98,10 +98,10 @@ func (s *Stream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache) {
 	dstIP := s.net.Dst().String()
 	srcPort := s.transport.Src().String()
 	dstPort := s.transport.Dst().String()
-	
+
 	srcFQDN, _ := dnsCache.Get(srcIP)
 	dstFQDN, _ := dnsCache.Get(dstIP)
-	
+
 	fmt.Printf("\n=== HTTP Response ===\n")
 	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
 	fmt.Printf("Source: %s:%s", srcIP, srcPort)
@@ -116,14 +116,14 @@ func (s *Stream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache) {
 	fmt.Printf("\n")
 	fmt.Printf("Status: %s\n", resp.Status)
 	fmt.Printf("Proto: %s\n", resp.Proto)
-	
+
 	fmt.Println("\nHeaders:")
 	for name, values := range resp.Header {
 		for _, value := range values {
 			fmt.Printf("  %s: %s\n", name, value)
 		}
 	}
-	
+
 	if resp.Body != nil {
 		body := make([]byte, 1024*1024) // 1MB max
 		n, _ := resp.Body.Read(body)
