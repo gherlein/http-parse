@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -45,6 +47,18 @@ func (c *Context) GetCaptureInfo() gopacket.CaptureInfo {
 
 type tcpStreamFactory struct {
 	dnsCache *dns.Cache
+}
+
+// Helper function to decompress gzip content
+func decompressGzip(data []byte) ([]byte, error) {
+	reader := bytes.NewReader(data)
+	gzipReader, err := gzip.NewReader(reader)
+	if err != nil {
+		return nil, err
+	}
+	defer gzipReader.Close()
+	
+	return io.ReadAll(gzipReader)
 }
 
 func (h *HTTPStream) run(dnsCache *dns.Cache) {
@@ -183,7 +197,17 @@ func (h *HTTPStream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 		body := make([]byte, 1024*1024) // 1MB max
 		n, _ := req.Body.Read(body)
 		if n > 0 {
-			fmt.Printf("\nRequest Body (%d bytes):\n%s\n", n, string(body[:n]))
+			bodyData := body[:n]
+			// Check if the request body is gzipped
+			if req.Header.Get("Content-Encoding") == "gzip" {
+				if decompressed, err := decompressGzip(bodyData); err == nil {
+					fmt.Printf("\nRequest Body (%d bytes, decompressed from gzip):\n%s\n", len(decompressed), string(decompressed))
+				} else {
+					fmt.Printf("\nRequest Body (%d bytes, gzip decompression failed):\n%s\n", n, string(bodyData))
+				}
+			} else {
+				fmt.Printf("\nRequest Body (%d bytes):\n%s\n", n, string(bodyData))
+			}
 		}
 		req.Body.Close()
 	}
@@ -231,7 +255,17 @@ func (h *HTTPStream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache)
 		body := make([]byte, 1024*1024) // 1MB max
 		n, _ := resp.Body.Read(body)
 		if n > 0 {
-			fmt.Printf("\nResponse Body (%d bytes):\n%s\n", n, string(body[:n]))
+			bodyData := body[:n]
+			// Check if the response body is gzipped
+			if resp.Header.Get("Content-Encoding") == "gzip" {
+				if decompressed, err := decompressGzip(bodyData); err == nil {
+					fmt.Printf("\nResponse Body (%d bytes, decompressed from gzip):\n%s\n", len(decompressed), string(decompressed))
+				} else {
+					fmt.Printf("\nResponse Body (%d bytes, gzip decompression failed):\n%s\n", n, string(bodyData))
+				}
+			} else {
+				fmt.Printf("\nResponse Body (%d bytes):\n%s\n", n, string(bodyData))
+			}
 		}
 		resp.Body.Close()
 	}
