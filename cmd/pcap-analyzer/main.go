@@ -176,11 +176,18 @@ func (t *tcpReader) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassem
 
 func main() {
 	var pcapFile string
+	var enableDNS bool
 	flag.StringVar(&pcapFile, "file", "", "Path to pcap file")
+	flag.BoolVar(&enableDNS, "d", false, "Enable DNS analysis")
+	flag.BoolVar(&enableDNS, "dns", false, "Enable DNS analysis")
 	flag.Parse()
 
 	if pcapFile == "" {
 		log.Fatal("Please provide a pcap file using -file flag")
+	}
+	
+	if !enableDNS {
+		fmt.Println("Note: DNS analysis disabled. Use -d or --dns to enable DNS parsing.")
 	}
 
 	handle, err := pcap.OpenOffline(pcapFile)
@@ -200,11 +207,17 @@ func main() {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 
 	fmt.Printf("Starting pcap analysis of file: %s\n", pcapFile)
-	fmt.Println("Tracking DNS queries and HTTP streams...")
+	if enableDNS {
+		fmt.Println("Tracking DNS queries and HTTP streams...")
+	} else {
+		fmt.Println("Tracking HTTP streams only...")
+	}
 	fmt.Println("=" + strings.Repeat("=", 50))
 
 	for packet := range packetSource.Packets() {
-		dns.ParsePacket(packet, dnsCache)
+		if enableDNS {
+			dns.ParsePacket(packet, dnsCache)
+		}
 
 		if tcp := packet.Layer(layers.LayerTypeTCP); tcp != nil {
 			tcpLayer := tcp.(*layers.TCP)

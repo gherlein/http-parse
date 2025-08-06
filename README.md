@@ -4,10 +4,10 @@ A Go program that parses pcap files and analyzes DNS and HTTP traffic, providing
 
 ## Features
 
-- **DNS Analysis**: Tracks DNS queries and responses, extracting FQDNs
 - **HTTP Stream Reassembly**: Reconstructs HTTP conversations from TCP streams  
+- **DNS Analysis** (optional): Tracks DNS queries and responses, extracting FQDNs when `-d`/`--dns` flag is used
 - **Full Traffic Details**: Shows headers, bodies, and endpoint information
-- **FQDN Resolution**: Maps IP addresses to domain names using DNS data
+- **FQDN Resolution**: Maps IP addresses to domain names using DNS data (when DNS analysis is enabled)
 - **Timestamp Tracking**: Records when each communication occurred
 
 ## Project Structure
@@ -78,11 +78,16 @@ make dev PCAP_FILE=/path/to/capture.pcap
 ### Direct Execution
 
 ```bash
-# Using built binary
+# Using built binary - HTTP traffic only
 ./bin/pcap-analyzer -file /path/to/capture.pcap
 
+# Using built binary - with DNS analysis
+./bin/pcap-analyzer -file /path/to/capture.pcap -d
+# or
+./bin/pcap-analyzer -file /path/to/capture.pcap --dns
+
 # Using go run
-go run ./cmd/pcap-analyzer -file /path/to/capture.pcap
+go run ./cmd/pcap-analyzer -file /path/to/capture.pcap -d
 ```
 
 ## Development
