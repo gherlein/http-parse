@@ -56,8 +56,8 @@ func (s *Stream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 	srcPort := s.transport.Src().String()
 	dstPort := s.transport.Dst().String()
 
-	srcFQDN, _ := dnsCache.Get(srcIP)
-	dstFQDN, _ := dnsCache.Get(dstIP)
+	srcFQDN := dnsCache.GetWithRDNS(srcIP)
+	dstFQDN := dnsCache.GetWithRDNS(dstIP)
 
 	fmt.Printf("\n=== HTTP Request ===\n")
 	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
@@ -99,8 +99,8 @@ func (s *Stream) printHTTPResponse(resp *http.Response, dnsCache *dns.Cache) {
 	srcPort := s.transport.Src().String()
 	dstPort := s.transport.Dst().String()
 
-	srcFQDN, _ := dnsCache.Get(srcIP)
-	dstFQDN, _ := dnsCache.Get(dstIP)
+	srcFQDN := dnsCache.GetWithRDNS(srcIP)
+	dstFQDN := dnsCache.GetWithRDNS(dstIP)
 
 	fmt.Printf("\n=== HTTP Response ===\n")
 	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))

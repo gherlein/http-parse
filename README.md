@@ -6,8 +6,9 @@ A Go program that parses pcap files and analyzes DNS and HTTP traffic, providing
 
 - **HTTP Stream Reassembly**: Reconstructs HTTP conversations from TCP streams  
 - **DNS Analysis** (optional): Tracks DNS queries and responses, extracting FQDNs when `-d`/`--dns` flag is used
+- **Reverse DNS Lookups**: Automatically performs reverse DNS lookups on all IP addresses to show hostnames
 - **Full Traffic Details**: Shows headers, bodies, and endpoint information
-- **FQDN Resolution**: Maps IP addresses to domain names using DNS data (when DNS analysis is enabled)
+- **FQDN Resolution**: Maps IP addresses to domain names using DNS data and reverse DNS lookups
 - **Timestamp Tracking**: Records when each communication occurred
 
 ## Project Structure
@@ -189,6 +190,10 @@ Headers:
 Response Body (1234 bytes):
 <!DOCTYPE html>...
 ```
+
+**Note**: Hostnames in parentheses are resolved using:
+1. Forward DNS resolution from captured DNS queries (when `-d`/`--dns` is enabled)
+2. Reverse DNS lookups performed automatically for all IP addresses
 
 ## Technical Details
 

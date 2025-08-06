@@ -61,8 +61,8 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			srcPort := h.transport.Src().String()
 			dstPort := h.transport.Dst().String()
 
-			srcFQDN, _ := dnsCache.Get(srcIP)
-			dstFQDN, _ := dnsCache.Get(dstIP)
+			srcFQDN := dnsCache.GetWithRDNS(srcIP)
+			dstFQDN := dnsCache.GetWithRDNS(dstIP)
 
 			fmt.Printf("\n=== HTTP Request ===\n")
 			fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
@@ -107,8 +107,8 @@ func (h *HTTPStream) run(dnsCache *dns.Cache) {
 			srcPort := h.transport.Src().String()
 			dstPort := h.transport.Dst().String()
 
-			srcFQDN, _ := dnsCache.Get(srcIP)
-			dstFQDN, _ := dnsCache.Get(dstIP)
+			srcFQDN := dnsCache.GetWithRDNS(srcIP)
+			dstFQDN := dnsCache.GetWithRDNS(dstIP)
 
 			fmt.Printf("\n=== HTTP Response ===\n")
 			fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
@@ -187,7 +187,8 @@ func main() {
 	}
 	
 	if !enableDNS {
-		fmt.Println("Note: DNS analysis disabled. Use -d or --dns to enable DNS parsing.")
+		fmt.Println("Note: DNS packet analysis disabled. HTTP traffic will still be analyzed.")
+		fmt.Println("      Use -d or --dns to enable DNS packet parsing.")
 	}
 
 	handle, err := pcap.OpenOffline(pcapFile)
