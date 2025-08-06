@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/gopacket"
@@ -71,8 +72,39 @@ func (s *Stream) printHTTPRequest(req *http.Request, dnsCache *dns.Cache) {
 		fmt.Printf(" (%s)", dstFQDN)
 	}
 	fmt.Printf("\n")
+	// Construct full URL with protocol and hostname
+	protocol := "http"
+	if dstPort == "443" || dstPort == "8443" {
+		protocol = "https"
+	}
+	
+	hostname := req.Host
+	if hostname == "" {
+		// Fallback to destination FQDN or IP
+		if dstFQDN != "" {
+			hostname = dstFQDN
+		} else {
+			hostname = dstIP
+		}
+	}
+	
+	// Remove port from hostname if it's a standard port
+	if (protocol == "http" && (dstPort == "80")) || (protocol == "https" && (dstPort == "443")) {
+		// Keep hostname as-is for standard ports
+	} else {
+		// Add port for non-standard ports
+		if !strings.Contains(hostname, ":") {
+			hostname = hostname + ":" + dstPort
+		}
+	}
+	
+	fullURL := fmt.Sprintf("%s://%s%s", protocol, hostname, req.URL.Path)
+	if req.URL.RawQuery != "" {
+		fullURL += "?" + req.URL.RawQuery
+	}
+	
 	fmt.Printf("Method: %s\n", req.Method)
-	fmt.Printf("URL: %s\n", req.URL)
+	fmt.Printf("URL: %s\n", fullURL)
 	fmt.Printf("Proto: %s\n", req.Proto)
 	fmt.Printf("Host: %s\n", req.Host)
 
